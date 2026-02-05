@@ -1,0 +1,53 @@
+name: Natural Farm 2000 in ~2h
+
+on:
+  workflow_dispatch:
+
+jobs:
+  natural:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Git
+        run: |
+          git config --global user.name "Nedlyatebya"
+          git config --global user.email "nedlyatebya@users.noreply.github.com"
+
+      - name: Natural commit spread (2000 over ~2 hours)
+        run: |
+          MAX_COMMITS=2000
+          COMMITS_PER_BATCH=8             # 8 за раз — GitHub нормально ест
+          SLEEP_BETWEEN_BATCH=30          # 30 сек между батчами → ~2 часа на 2000
+          RANDOM_MESSAGES=("small fix" "added note" "learning update" "progress" "daily commit" "code improvement" "experiment" "refactor")
+
+          total=0
+          start_time=$(date +%s)
+
+          while [ $total -lt $MAX_COMMITS ]; do
+            remaining=$((MAX_COMMITS - total))
+            batch=$(( COMMITS_PER_BATCH < remaining ? COMMITS_PER_BATCH : remaining ))
+
+            for ((i=1; i<=batch; i++)); do
+              ts=$(date '+%Y-%m-%d %H:%M:%S')
+              rnd_msg=${RANDOM_MESSAGES[$RANDOM % ${#RANDOM_MESSAGES[@]}]}
+              rnd_num=$((RANDOM % 999 + 1))
+              echo "$ts | $rnd_msg #$rnd_num" >> natural-progress.log
+              echo "- $rnd_msg $rnd_num @ $ts" >> README-progress.md
+            done
+
+            git add .
+            git commit -m "${RANDOM_MESSAGES[$RANDOM % ${#RANDOM_MESSAGES[@]}]} | $ts" --allow-empty || echo "Commit skipped"
+            git push origin HEAD || { echo "Push failed, retrying..."; sleep 45; git push origin HEAD; }
+
+            total=$((total + batch))
+            current_time=$(date +%s)
+            elapsed=$((current_time - start_time))
+            echo "Progress: $total / $MAX_COMMITS | elapsed ~$((elapsed / 60)) min"
+
+            sleep $SLEEP_BETWEEN_BATCH
+          done
+
+          echo "Finished natural farm: $total commits in ~$(( (current_time - start_time) / 60 )) minutes"
