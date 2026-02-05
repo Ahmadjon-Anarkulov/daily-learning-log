@@ -1,0 +1,54 @@
+name: One-Click Fast Farm - Max 2000
+
+on:
+  workflow_dispatch:  # Только ручной запуск — кнопка Run workflow
+
+permissions:
+  contents: write     # Чтобы мог писать и пушить
+
+jobs:
+  rapid-farm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Git config
+        run: |
+          git config --global user.name "Nedlyatebya"
+          git config --global user.email "nedlyatebya@users.noreply.github.com"
+
+      - name: Fast commit loop (up to 2000 commits)
+        run: |
+          # ================= НАСТРОЙКИ =================
+          MAX_COMMITS=2000                 # Твой лимит — не больше 2000
+          COMMITS_PER_PUSH=40              # По сколько коммитов в одном push (чтобы не словить лимит ~100–200 push/час)
+          SLEEP_BETWEEN_PUSHES=3           # Секунд паузы между push (увеличь если падает)
+          # =============================================
+
+          total=0
+          while [ $total -lt $MAX_COMMITS ]; do
+            remaining=$((MAX_COMMITS - total))
+            batch=$(( COMMITS_PER_PUSH < remaining ? COMMITS_PER_PUSH : remaining ))
+
+            for ((i=1; i<=batch; i++)); do
+              ts=$(date '+%Y-%m-%d %H:%M:%S.%3N')
+              rnd=$((RANDOM % 9999 + 1))
+              echo "$ts | rapid commit #$rnd" >> rapid-farm.log
+              echo "- Commit $rnd @ $ts" >> progress.md
+            done
+
+            git add .
+            git commit -m "Rapid batch: $batch commits | $(date '+%H:%M:%S')" --allow-empty || echo "Batch commit skipped"
+
+            git push origin HEAD || { echo "Push failed — sleeping extra"; sleep 10; git push origin HEAD; }
+
+            total=$((total + batch))
+            echo "Progress: $total / $MAX_COMMITS commits"
+
+            sleep $SLEEP_BETWEEN_PUSHES
+          done
+
+          echo "DONE! Total: $total commits in this run."
